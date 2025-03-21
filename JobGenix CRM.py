@@ -1,28 +1,28 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import os
 
 # File paths
 users_file, tasks_file, log_file = "users.csv", "tasks.csv", "login_logout.csv"
+employee_file = "employee_details.xlsx"  # File to store employee details
 
 # Initialize files and data
 try:
     users = pd.read_csv(users_file).set_index("Username").to_dict("index")
-except:
+except FileNotFoundError:
     users = {"admin": {"password": "admin123", "role": "admin"}}
-    pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file,
-                                                                                                             index=False)
+    pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
 
 try:
     tasks_data = pd.read_csv(tasks_file)
-except:
-    tasks_data = pd.DataFrame(
-        columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
+except FileNotFoundError:
+    tasks_data = pd.DataFrame(columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
     tasks_data.to_csv(tasks_file, index=False)
 
 try:
     log_data = pd.read_csv(log_file)
-except:
+except FileNotFoundError:
     log_data = pd.DataFrame(columns=["Username", "Action", "Timestamp"])
     log_data.to_csv(log_file, index=False)
 
@@ -33,11 +33,9 @@ if "page" not in st.session_state: st.session_state.page = "login"
 if "refresh" not in st.session_state: st.session_state.refresh = False
 if "date_format" not in st.session_state: st.session_state.date_format = "%Y-%m-%d %H:%M:%S"  # Default format
 
-
 # Helper functions
 def login(username, password):
     return users[username]["role"] if username in users and users[username]["password"] == password else None
-
 
 def record_action(username, action):
     global log_data
@@ -46,31 +44,25 @@ def record_action(username, action):
     log_data = pd.concat([log_data, new_entry])
     log_data.to_csv(log_file, index=False)
 
-
 def delete_task_data(delete_all=False, index=None):
     global tasks_data
     if delete_all:
-        tasks_data = pd.DataFrame(
-            columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
+        tasks_data = pd.DataFrame(columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
     elif index is not None:
         tasks_data = tasks_data.drop(index=index).reset_index(drop=True)
     tasks_data.to_csv(tasks_file, index=False)
 
-
 def delete_user(username):
     if username in users:
         del users[username]
-        pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(
-            users_file, index=False)
+        pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
         return True
     return False
-
 
 def delete_all_login_logout_details():
     global log_data
     log_data = pd.DataFrame(columns=["Username", "Action", "Timestamp"])  # Clear log data
     log_data.to_csv(log_file, index=False)  # Update the CSV file
-
 
 def filter_login_details(username=None, start_date=None, end_date=None):
     filtered_data = log_data
@@ -82,12 +74,68 @@ def filter_login_details(username=None, start_date=None, end_date=None):
         filtered_data = filtered_data[filtered_data["Timestamp"] <= str(end_date)]
     return filtered_data
 
-
 def daily_logs():
     today = datetime.datetime.now().date()
     today_logs = log_data[log_data["Timestamp"].str.startswith(str(today))]
     return today_logs
 
+# Employee Details Page
+def employee_details_page():
+    st.title("Employee Details")
+
+    # Check if the user is an admin
+    if st.session_state.role != "admin":
+        st.error("You do not have permission to access this section.")
+        return
+
+    # File uploader for Excel file
+    uploaded_file = st.file_uploader("Upload Employee Details Excel File", type=["xlsx"])
+
+    if uploaded_file:
+        # Save the uploaded file to a permanent location
+        with open(employee_file, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        st.success("Employee details file uploaded successfully!")
+
+    # Check if the employee file exists
+    if os.path.exists(employee_file):
+        # Read the uploaded Excel file
+        employee_data = pd.read_excel(employee_file, sheet_name=None)  # Read all sheets
+        sheet_names = employee_data.keys()
+
+        # Display sheet names for selection
+        selected_sheet = st.selectbox("Select Sheet", sheet_names)
+        df = employee_data[selected_sheet]
+
+        # Display the employee data
+        st.dataframe(df)
+
+        # Enable editing options using text inputs for each row
+        edited_df = df.copy()
+        for index, row in df.iterrows():
+            with st.expander(f"Edit Row {index + 1}"):
+                for col in df.columns:
+                    # Use a unique key for each text input
+                    edited_df.at[index, col] = st.text_input(f"{col}", value=row[col], key=f"{col}_{index}")
+
+        # Save changes button
+        if st.button("Save Changes"):
+            with pd.ExcelWriter(employee_file, engine='openpyxl', mode='a') as writer:
+                edited_df.to_excel(writer, sheet_name=selected_sheet, index=False)
+            st.success("Changes saved successfully!")
+
+        # Search functionality
+        search_name = st.text_input("Search Employee by Name")
+        if search_name:
+            filtered_df = edited_df[edited_df['Employee Name'].str.contains(search_name, case=False, na=False)]
+            st.dataframe(filtered_df)
+
+        # Option to delete the uploaded file
+        if st.button("Delete Employee Details File"):
+            os.remove(employee_file)
+            st.success("Employee details file deleted successfully!")
+    else:
+        st.info("No employee details file uploaded yet.")
 
 # Pages
 def login_page():
@@ -121,12 +169,11 @@ def login_page():
                     columns={"index": "Username"}).to_csv(users_file, index=False)
                 st.success(f"Account created for {new_user} as {role}.")
 
-
 def task_page():
     global tasks_data
     st.sidebar.title("Menu")
     menu = ["View Tasks", "Add Task", "Update Task", "Delete Task Data", "Login Details", "Daily Logs", "Delete User",
-            "View Passwords", "Configure Date Format", "Logout"]
+            "View Passwords", "Configure Date Format", "Employee Details", "Logout"]
     choice = st.sidebar.selectbox("Options", menu)
 
     st.header(f"Welcome, {st.session_state.current_user} ({st.session_state.role.capitalize()})")
@@ -223,22 +270,23 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User   '{del_user}' has been deleted!")
+                st.success(f"User  '{del_user}' has been deleted!")
             else:
-                st.error(f"User   '{del_user}' not found!")
+                st.error(f"User  '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
         st.dataframe(passwords)
+
+    if choice == "Employee Details":
+        employee_details_page()
 
     if choice == "Logout":
         record_action(st.session_state.current_user, "Logout")
         st.session_state.current_user, st.session_state.role, st.session_state.page = None, None, "login"
         st.success("Logged out!")
 
-
 # Main Logic
-
 if st.session_state.page == "login":
     login_page()
 elif st.session_state.page == "tasks":
