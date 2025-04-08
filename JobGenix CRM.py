@@ -45,6 +45,7 @@ def record_action(username, action):
     global log_data
     # Set timezone to Indian Standard Time (GMT+5:30)
     india_timezone = pytz.timezone('Asia/Kolkata')
+    current_time = datetime.now(india_timezone)
     timestamp = datetime.datetime.now(india_timezone).strftime("%Y-%m-%d %H:%M:%S")  # Standard date format
     new_entry = pd.DataFrame({"Username": [username], "Action": [action], "Timestamp": [timestamp]})
     log_data = pd.concat([log_data, new_entry], ignore_index=True)
