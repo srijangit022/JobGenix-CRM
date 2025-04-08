@@ -35,7 +35,6 @@ if "current_user" not in st.session_state: st.session_state.current_user = None
 if "role" not in st.session_state: st.session_state.role = None
 if "page" not in st.session_state: st.session_state.page = "login"
 if "refresh" not in st.session_state: st.session_state.refresh = False
-if "date_format" not in st.session_state: st.session_state.date_format = "%Y-%m-%d %H:%M:%S"  # Default format
 
 # Helper functions
 def login(username, password):
@@ -43,7 +42,7 @@ def login(username, password):
 
 def record_action(username, action):
     global log_data
-    timestamp = datetime.datetime.now().strftime(st.session_state.date_format)  # Use configured date format
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Standard date format
     new_entry = pd.DataFrame({"Username": [username], "Action": [action], "Timestamp": [timestamp]})
     log_data = pd.concat([log_data, new_entry])
     log_data.to_csv(log_file, index=False)
@@ -185,27 +184,14 @@ def login_page():
                     columns={"index": "Username"}).to_csv(users_file, index=False)
                 st.success(f"Account created for {new_user} as {role}.")
 
-
 def task_page():
     global tasks_data
     st.sidebar.title("Menu")
     menu = ["View Tasks", "Add Task", "Update Task", "Delete Task Data", "Login Details", "Daily Logs", "Delete User",
-            "View Passwords", "Configure Date Format", "Employee Details", "Logout"]
+            "View Passwords", "Employee Details", "Logout"]
     choice = st.sidebar.selectbox("Options", menu)
 
     st.header(f"Welcome, {st.session_state.current_user} ({st.session_state.role.capitalize()})")
-
-    # Configure Date Format - Admin Only
-    if choice == "Configure Date Format":
-        if st.session_state.role == "admin":
-            st.subheader("Configure Date and Time Format")
-            date_format = st.text_input("Enter Date Format (e.g., %Y-%m-%d %H:%M:%S)",
-                                        value=st.session_state.date_format)
-            if st.button("Save Format"):
-                st.session_state.date_format = date_format
-                st.success("Date format updated!")
-        else:
-            st.error("You do not have permission to access this feature.")
 
     if choice == "View Tasks":
         if st.button("Refresh Tasks"):
@@ -293,9 +279,9 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User   '{del_user}' has been deleted!")
+                st.success(f"User  '{del_user}' has been deleted!")
             else:
-                st.error(f"User   '{del_user}' not found!")
+                st.error(f"User  '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
@@ -308,6 +294,7 @@ def task_page():
         record_action(st.session_state.current_user, "Logout")
         st.session_state.current_user, st.session_state.role, st.session_state.page = None, None, "login"
         st.success("Logged out!")
+
 # Main Logic
 if st.session_state.page == "login":
     login_page()
