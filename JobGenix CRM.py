@@ -44,7 +44,7 @@ def record_action(username, action):
     global log_data
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")  # Standard date format
     new_entry = pd.DataFrame({"Username": [username], "Action": [action], "Timestamp": [timestamp]})
-    log_data = pd.concat([log_data, new_entry])
+    log_data = pd.concat([log_data, new_entry], ignore_index=True)
     log_data.to_csv(log_file, index=False)
 
 def delete_task_data(delete_all=False, index=None):
@@ -279,9 +279,9 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User  '{del_user}' has been deleted!")
+                st.success(f"User   '{del_user}' has been deleted!")
             else:
-                st.error(f"User  '{del_user}' not found!")
+                st.error(f"User   '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
