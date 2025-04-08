@@ -44,7 +44,7 @@ def login(username, password):
 def record_action(username, action):
     global log_data
     # Set timezone to your local timezone (e.g., 'America/New_York')
-    timezone = pytz.timezone('America/New_York')  # Change this to your timezone
+    timezone = pytz.timezone('India/New Delhi')  # Change this to your timezone
     timestamp = datetime.datetime.now(timezone).strftime("%Y-%m-%d %H:%M:%S")  # Standard date format
     new_entry = pd.DataFrame({"Username": [username], "Action": [action], "Timestamp": [timestamp]})
     log_data = pd.concat([log_data, new_entry], ignore_index=True)
