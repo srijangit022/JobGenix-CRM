@@ -185,6 +185,7 @@ def login_page():
                     columns={"index": "Username"}).to_csv(users_file, index=False)
                 st.success(f"Account created for {new_user} as {role}.")
 
+
 def task_page():
     global tasks_data
     st.sidebar.title("Menu")
@@ -244,12 +245,18 @@ def task_page():
                 st.success("Task added!")
 
     if choice == "Update Task" and st.session_state.role == "employee":
-        task_index = st.number_input("Task Index", min_value=0, max_value=len(tasks_data) - 1, step=1)
-        status = st.selectbox("Update Status", ["Done", "Delayed", "To Be Done", "On Track", "Not Done"])
-        if st.button("Update Task"):
-            tasks_data.at[task_index, "Status"] = status
-            tasks_data.to_csv(tasks_file, index=False)
-            st.success("Task updated!")
+        employee_name = st.session_state.current_user
+        employee_tasks = tasks_data[tasks_data["Employee Name"] == employee_name]
+
+        if not employee_tasks.empty:
+            task_index = st.selectbox("Select Task to Update", employee_tasks.index)
+            status = st.selectbox("Update Status", ["Done", "Delayed", "To Be Done", "On Track", "Not Done"])
+            if st.button("Update Task"):
+                tasks_data.at[task_index, "Status"] = status
+                tasks_data.to_csv(tasks_file, index=False)
+                st.success("Task updated!")
+        else:
+            st.info("You have no tasks assigned.")
 
     if choice == "Delete Task Data" and st.session_state.role == "admin":
         if st.button("Delete All Tasks"):
@@ -286,9 +293,9 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User    '{del_user}' has been deleted!")
+                st.success(f"User   '{del_user}' has been deleted!")
             else:
-                st.error(f"User    '{del_user}' not found!")
+                st.error(f"User   '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
@@ -301,7 +308,6 @@ def task_page():
         record_action(st.session_state.current_user, "Logout")
         st.session_state.current_user, st.session_state.role, st.session_state.page = None, None, "login"
         st.success("Logged out!")
-
 # Main Logic
 if st.session_state.page == "login":
     login_page()
