@@ -5,4 +5,3 @@ openpyxl
 datetime
 pytz
 
-This code snippet sets the timezone to Indian Standard Time (GMT +5:30) and displays both the current IST time and a converted UTC time in your Streamlit app.
