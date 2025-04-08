@@ -5,7 +5,11 @@ import os
 
 # File paths
 users_file, tasks_file, log_file = "users.csv", "tasks.csv", "login_logout.csv"
-employee_file = "employee_details.xlsx"  # File to store employee details
+employee_directory = "employee_details/"  # Directory to store employee details
+
+# Create directory if it doesn't exist
+if not os.path.exists(employee_directory):
+    os.makedirs(employee_directory)
 
 # Initialize files and data
 try:
@@ -92,50 +96,62 @@ def employee_details_page():
     uploaded_file = st.file_uploader("Upload Employee Details Excel File", type=["xlsx"])
 
     if uploaded_file:
-        # Save the uploaded file to a permanent location
-        with open(employee_file, "wb") as f:
-            f.write(uploaded_file.getbuffer())
-        st.success("Employee details file uploaded successfully!")
+        # Check the number of existing files
+        existing_files = os.listdir(employee_directory)
+        if len(existing_files) >= 30:
+            st.error("You can only upload up to 30 employee detail files. Please delete some files before uploading new ones.")
+        else:
+            # Save the uploaded file to the employee directory
+            file_path = os.path.join(employee_directory, uploaded_file.name)
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.success("Employee details file uploaded successfully!")
 
-    # Check if the employee file exists
-    if os.path.exists(employee_file):
-        # Read the uploaded Excel file
-        employee_data = pd.read_excel(employee_file, sheet_name=None)  # Read all sheets
-        sheet_names = employee_data.keys()
+    # Display existing employee files
+    st.subheader("Existing Employee Details Files")
+    existing_files = os.listdir(employee_directory)
+    if existing_files:
+        selected_file = st.selectbox("Select a file to view", existing_files)
+        if selected_file:
+            file_path = os.path.join(employee_directory, selected_file)
+            sheets = pd.ExcelFile(file_path).sheet_names
+            selected_sheet = st.selectbox("Select a sheet to view", sheets)
 
-        # Display sheet names for selection
-        selected_sheet = st.selectbox("Select Sheet", sheet_names)
-        df = employee_data[selected_sheet]
+            # Read the selected sheet
+            df = pd.read_excel(file_path, sheet_name=selected_sheet)
+            st.dataframe(df)
 
-        # Display the employee data
-        st.dataframe(df)
+            # Editing options
+            edited_df = df.copy()
+            for index, row in df.iterrows():
+                with st.expander(f"Edit Row {index + 1}"):
+                    for col in df.columns:
+                        edited_df.at[index, col] = st.text_input(f"{col}", value=row[col], key=f"{col}_{index}")
 
-        # Enable editing options using text inputs for each row
-        edited_df = df.copy()
-        for index, row in df.iterrows():
-            with st.expander(f"Edit Row {index + 1}"):
-                for col in df.columns:
-                    # Use a unique key for each text input
-                    edited_df.at[index, col] = st.text_input(f"{col}", value=row[col], key=f"{col}_{index}")
+            # Save changes button
+            if st.button("Save Changes"):
+                with pd.ExcelWriter(file_path, engine='openpyxl', mode='a') as writer:
+                    edited_df.to_excel(writer, sheet_name=selected_sheet, index=False)
+                st.success("Changes saved successfully!")
 
-        # Save changes button
-        if st.button("Save Changes"):
-            with pd.ExcelWriter(employee_file, engine='openpyxl', mode='a') as writer:
-                edited_df.to_excel(writer, sheet_name=selected_sheet, index=False)
-            st.success("Changes saved successfully!")
+            # Search functionality
+            search_term = st.text_input("Search Employee:")
+            if st.button("Search"):
+                if search_term:
+                    filtered_data = edited_df[edited_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+                    if not filtered_data.empty:
+                        st.dataframe(filtered_data)
+                    else:
+                        st.warning("No matching records found.")
+                else:
+                    st.warning("Please enter a search term.")
 
-        # Search functionality
-        search_name = st.text_input("Search Employee by Name")
-        if search_name:
-            filtered_df = edited_df[edited_df['Employee Name'].str.contains(search_name, case=False, na=False)]
-            st.dataframe(filtered_df)
-
-        # Option to delete the uploaded file
-        if st.button("Delete Employee Details File"):
-            os.remove(employee_file)
-            st.success("Employee details file deleted successfully!")
+            # Option to delete the uploaded file
+            if st.button(f"Delete {selected_file}"):
+                os.remove(file_path)
+                st.success(f"{selected_file} deleted successfully!")
     else:
-        st.info("No employee details file uploaded yet.")
+        st.info("No employee details files uploaded yet.")
 
 # Pages
 def login_page():
@@ -270,9 +286,9 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User  '{del_user}' has been deleted!")
+                st.success(f"User    '{del_user}' has been deleted!")
             else:
-                st.error(f"User  '{del_user}' not found!")
+                st.error(f"User    '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
