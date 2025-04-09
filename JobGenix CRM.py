@@ -1,8 +1,8 @@
 import streamlit as st
 import pandas as pd
-import datetime
 import os
 import pytz  # Import pytz for timezone handling
+from datetime import datetime  # Import datetime class
 
 # File paths
 users_file, tasks_file, log_file = "users.csv", "tasks.csv", "login_logout.csv"
@@ -45,8 +45,7 @@ def record_action(username, action):
     global log_data
     # Set timezone to Indian Standard Time (GMT+5:30)
     india_timezone = pytz.timezone('Asia/Kolkata')
-    current_time = datetime.now(india_timezone)
-    timestamp = datetime.datetime.now(india_timezone).strftime("%Y-%m-%d %H:%M:%S")  # Standard date format
+    timestamp = datetime.now(india_timezone).strftime("%Y-%m-%d %H:%M:%S")  # Standard date format
     new_entry = pd.DataFrame({"Username": [username], "Action": [action], "Timestamp": [timestamp]})
     log_data = pd.concat([log_data, new_entry], ignore_index=True)
     log_data.to_csv(log_file, index=False)
@@ -82,7 +81,7 @@ def filter_login_details(username=None, start_date=None, end_date=None):
     return filtered_data
 
 def daily_logs():
-    today = datetime.datetime.now().date()
+    today = datetime.now(pytz.timezone('Asia/Kolkata')).date()  # Get today's date in IST
     today_logs = log_data[log_data["Timestamp"].str.startswith(str(today))]
     return today_logs
 
@@ -283,9 +282,9 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User  '{del_user}' has been deleted!")
+                st.success(f"User   '{del_user}' has been deleted!")
             else:
-                st.error(f"User  '{del_user}' not found!")
+                st.error(f"User   '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
