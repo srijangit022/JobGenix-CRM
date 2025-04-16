@@ -3,26 +3,32 @@ import pandas as pd
 import os
 import pytz  # Import pytz for timezone handling
 from datetime import datetime  # Import datetime class
+from PyPDF2 import PdfReader  # Import PdfReader for reading PDF files
 
 # File paths
 users_file, tasks_file, log_file = "users.csv", "tasks.csv", "login_logout.csv"
 employee_directory = "employee_details/"  # Directory to store employee details
+resume_directory = "resumes/"  # Directory to store resumes
 
-# Create directory if it doesn't exist
+# Create directories if they don't exist
 if not os.path.exists(employee_directory):
     os.makedirs(employee_directory)
+if not os.path.exists(resume_directory):
+    os.makedirs(resume_directory)
 
 # Initialize files and data
 try:
     users = pd.read_csv(users_file).set_index("Username").to_dict("index")
 except FileNotFoundError:
     users = {"admin": {"password": "admin123", "role": "admin"}}
-    pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
+    pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file,
+                                                                                                             index=False)
 
 try:
     tasks_data = pd.read_csv(tasks_file)
 except FileNotFoundError:
-    tasks_data = pd.DataFrame(columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
+    tasks_data = pd.DataFrame(
+        columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
     tasks_data.to_csv(tasks_file, index=False)
 
 try:
@@ -37,9 +43,11 @@ if "role" not in st.session_state: st.session_state.role = None
 if "page" not in st.session_state: st.session_state.page = "login"
 if "refresh" not in st.session_state: st.session_state.refresh = False
 
+
 # Helper functions
 def login(username, password):
     return users[username]["role"] if username in users and users[username]["password"] == password else None
+
 
 def record_action(username, action):
     global log_data
@@ -50,25 +58,31 @@ def record_action(username, action):
     log_data = pd.concat([log_data, new_entry], ignore_index=True)
     log_data.to_csv(log_file, index=False)
 
+
 def delete_task_data(delete_all=False, index=None):
     global tasks_data
     if delete_all:
-        tasks_data = pd.DataFrame(columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
+        tasks_data = pd.DataFrame(
+            columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
     elif index is not None:
         tasks_data = tasks_data.drop(index=index).reset_index(drop=True)
     tasks_data.to_csv(tasks_file, index=False)
 
+
 def delete_user(username):
     if username in users:
         del users[username]
-        pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
+        pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(
+            users_file, index=False)
         return True
     return False
+
 
 def delete_all_login_logout_details():
     global log_data
     log_data = pd.DataFrame(columns=["Username", "Action", "Timestamp"])  # Clear log data
     log_data.to_csv(log_file, index=False)  # Update the CSV file
+
 
 def filter_login_details(username=None, start_date=None, end_date=None):
     filtered_data = log_data
@@ -80,10 +94,12 @@ def filter_login_details(username=None, start_date=None, end_date=None):
         filtered_data = filtered_data[filtered_data["Timestamp"] <= str(end_date)]
     return filtered_data
 
+
 def daily_logs():
     today = datetime.now(pytz.timezone('Asia/Kolkata')).date()  # Get today's date in IST
     today_logs = log_data[log_data["Timestamp"].str.startswith(str(today))]
     return today_logs
+
 
 # Employee Details Page
 def employee_details_page():
@@ -101,7 +117,8 @@ def employee_details_page():
         # Check the number of existing files
         existing_files = os.listdir(employee_directory)
         if len(existing_files) >= 30:
-            st.error("You can only upload up to 30 employee detail files. Please delete some files before uploading new ones.")
+            st.error(
+                "You can only upload up to 30 employee detail files. Please delete some files before uploading new ones.")
         else:
             # Save the uploaded file to the employee directory
             file_path = os.path.join(employee_directory, uploaded_file.name)
@@ -140,7 +157,9 @@ def employee_details_page():
             search_term = st.text_input("Search Employee:")
             if st.button("Search"):
                 if search_term:
-                    filtered_data = edited_df[edited_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+                    filtered_data = edited_df[
+                        edited_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(),
+                                        axis=1)]
                     if not filtered_data.empty:
                         st.dataframe(filtered_data)
                     else:
@@ -154,6 +173,45 @@ def employee_details_page():
                 st.success(f"{selected_file} deleted successfully!")
     else:
         st.info("No employee details files uploaded yet.")
+
+
+# Employee Background Page
+def employee_background_page():
+    st.title("Employee Background")
+
+    # File uploader for PDF resumes
+    uploaded_file = st.file_uploader("Upload Employee Resume (PDF)", type=["pdf"])
+
+    if uploaded_file is not None:
+        # Save the uploaded file
+        file_path = os.path.join(resume_directory, uploaded_file.name)
+        with open(file_path, "wb") as f:
+            f.write(uploaded_file.getbuffer())
+        st.success("Resume uploaded successfully!")
+
+    # Display existing resumes
+    st.subheader("Uploaded Resumes")
+    resumes = [resume for resume in os.listdir(resume_directory) if resume.endswith(".pdf")]
+
+    if resumes:
+        selected_resume = st.selectbox("Select a resume to view", resumes)
+
+        # Button to view the PDF
+        if st.button(f"View {selected_resume}"):
+            with open(os.path.join(resume_directory, selected_resume), "rb") as f:
+                pdf_reader = PdfReader(f)
+                pdf_text = ""
+                for page in pdf_reader.pages:
+                    pdf_text += page.extract_text() + "\n"
+                st.text_area("Resume Content", pdf_text, height=300)
+
+        # Option to delete the selected resume
+        if st.button(f"Delete {selected_resume}"):
+            os.remove(os.path.join(resume_directory, selected_resume))
+            st.success(f"{selected_resume} deleted successfully!")
+    else:
+        st.write("No resumes uploaded yet.")
+
 
 # Pages
 def login_page():
@@ -187,11 +245,12 @@ def login_page():
                     columns={"index": "Username"}).to_csv(users_file, index=False)
                 st.success(f"Account created for {new_user} as {role}.")
 
+
 def task_page():
     global tasks_data
     st.sidebar.title("Menu")
     menu = ["View Tasks", "Add Task", "Update Task", "Delete Task Data", "Login Details", "Daily Logs", "Delete User",
-            "View Passwords", "Employee Details", "Logout"]
+            "View Passwords", "Employee Details", "Employee Background", "Logout"]
     choice = st.sidebar.selectbox("Options", menu)
 
     st.header(f"Welcome, {st.session_state.current_user} ({st.session_state.role.capitalize()})")
@@ -282,9 +341,9 @@ def task_page():
         del_user = st.text_input("Enter Username to Delete")
         if st.button("Delete User"):
             if delete_user(del_user):
-                st.success(f"User   '{del_user}' has been deleted!")
+                st.success(f"User  '{del_user}' has been deleted!")
             else:
-                st.error(f"User   '{del_user}' not found!")
+                st.error(f"User  '{del_user}' not found!")
 
     if choice == "View Passwords" and st.session_state.role == "admin":
         passwords = pd.DataFrame(users).transpose().reset_index().rename(columns={"index": "Username"})
@@ -293,10 +352,14 @@ def task_page():
     if choice == "Employee Details":
         employee_details_page()
 
+    if choice == "Employee Background":
+        employee_background_page()
+
     if choice == "Logout":
         record_action(st.session_state.current_user, "Logout")
         st.session_state.current_user, st.session_state.role, st.session_state.page = None, None, "login"
         st.success("Logged out!")
+
 
 # Main Logic
 if st.session_state.page == "login":
