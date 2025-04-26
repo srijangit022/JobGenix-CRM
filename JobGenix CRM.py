@@ -13,6 +13,7 @@ users_file = "users.csv"
 tasks_file = "tasks.csv"
 log_file = "login_logout.csv"
 leave_file = "leave_applications.csv"
+attendance_file = "attendance.csv"
 employee_directory = "employee_details/"
 resume_directory = "resumes/"
 
@@ -27,12 +28,14 @@ try:
     users = pd.read_csv(users_file).set_index("Username").to_dict("index")
 except FileNotFoundError:
     users = {"admin": {"password": "admin123", "role": "admin"}}
-    pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
+    pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file,
+                                                                                                             index=False)
 
 try:
     tasks_data = pd.read_csv(tasks_file)
 except FileNotFoundError:
-    tasks_data = pd.DataFrame(columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
+    tasks_data = pd.DataFrame(
+        columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
     tasks_data.to_csv(tasks_file, index=False)
 
 try:
@@ -47,6 +50,12 @@ except FileNotFoundError:
     leave_data = pd.DataFrame(columns=["Employee Name", "Leave Type", "Start Date", "End Date", "Status"])
     leave_data.to_csv(leave_file, index=False)
 
+try:
+    attendance_data = pd.read_csv(attendance_file)
+except FileNotFoundError:
+    attendance_data = pd.DataFrame(columns=["Username", "Date", "Check-In Time", "Check-Out Time", "Status"])
+    attendance_data.to_csv(attendance_file, index=False)
+
 # Session state variables
 if "current_user" not in st.session_state:
     st.session_state.current_user = None
@@ -57,9 +66,11 @@ if "page" not in st.session_state:
 if "refresh" not in st.session_state:
     st.session_state.refresh = False
 
+
 # Helper functions
 def login(username, password):
     return users[username]["role"] if username in users and users[username]["password"] == password else None
+
 
 def record_action(username, action):
     global log_data
@@ -69,25 +80,31 @@ def record_action(username, action):
     log_data = pd.concat([log_data, new_entry], ignore_index=True)
     log_data.to_csv(log_file, index=False)
 
+
 def delete_task_data(delete_all=False, index=None):
     global tasks_data
     if delete_all:
-        tasks_data = pd.DataFrame(columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
+        tasks_data = pd.DataFrame(
+            columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])
     elif index is not None:
         tasks_data = tasks_data.drop(index=index).reset_index(drop=True)
     tasks_data.to_csv(tasks_file, index=False)
 
+
 def delete_user(username):
     if username in users:
         del users[username]
-        pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
+        pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(
+            users_file, index=False)
         return True
     return False
+
 
 def delete_all_login_logout_details():
     global log_data
     log_data = pd.DataFrame(columns=["Username", "Action", "Timestamp"])
     log_data.to_csv(log_file, index=False)
+
 
 def filter_login_details(username=None, start_date=None, end_date=None):
     filtered_data = log_data
@@ -99,10 +116,12 @@ def filter_login_details(username=None, start_date=None, end_date=None):
         filtered_data = filtered_data[filtered_data["Timestamp"] <= str(end_date)]
     return filtered_data
 
+
 def daily_logs():
     today = datetime.now(pytz.timezone('Asia/Kolkata')).date()
     today_logs = log_data[log_data["Timestamp"].str.startswith(str(today))]
     return today_logs
+
 
 def apply_for_leave(employee_name, leave_type, start_date, end_date):
     global leave_data
@@ -110,6 +129,7 @@ def apply_for_leave(employee_name, leave_type, start_date, end_date):
                                    columns=["Employee Name", "Leave Type", "Start Date", "End Date", "Status"])
     leave_data = pd.concat([leave_data, new_application], ignore_index=True)
     leave_data.to_csv(leave_file, index=False)
+
 
 def manage_leave_applications():
     global leave_data
@@ -133,6 +153,7 @@ def manage_leave_applications():
     else:
         st.info("No pending leave applications.")
 
+
 def send_email_notification(employee_name, status):
     employee_email = f"{employee_name}@gmail.com"
     subject = "Leave Application Status"
@@ -151,6 +172,7 @@ def send_email_notification(employee_name, status):
     except Exception as e:
         st.error(f"Failed to send email: {e}")
 
+
 def employee_leave_status():
     st.title("Leave Status Overview")
     employee_name = st.session_state.current_user
@@ -164,6 +186,75 @@ def employee_leave_status():
     else:
         st.info("No leave applications found.")
 
+
+def record_attendance(username, action):
+    global attendance_data
+    india_timezone = pytz.timezone('Asia/Kolkata')
+    today = datetime.now(india_timezone).date()
+    current_time = datetime.now(india_timezone).strftime("%H:%M:%S")
+
+    # Check if there's an existing record for the user today
+    today_record = attendance_data[(attendance_data["Username"] == username) & (attendance_data["Date"] == str(today))]
+
+    if action == "Check-In":
+        if not today_record.empty:
+            st.error("You have already checked in today!")
+        else:
+            new_entry = pd.DataFrame({
+                "Username": [username],
+                "Date": [str(today)],
+                "Check-In Time": [current_time],
+                "Check-Out Time": [""],
+                "Status": ["Checked In"]
+            })
+            attendance_data = pd.concat([attendance_data, new_entry], ignore_index=True)
+            attendance_data.to_csv(attendance_file, index=False)
+            st.success("Successfully checked in!")
+
+    elif action == "Check-Out":
+        if today_record.empty:
+            st.error("You haven't checked in today!")
+        elif not today_record["Check-Out Time"].iloc[0] == "":
+            st.error("You have already checked out today!")
+        else:
+            attendance_data.loc[(attendance_data["Username"] == username) & (
+                        attendance_data["Date"] == str(today)), "Check-Out Time"] = current_time
+            attendance_data.loc[(attendance_data["Username"] == username) & (
+                        attendance_data["Date"] == str(today)), "Status"] = "Checked Out"
+            attendance_data.to_csv(attendance_file, index=False)
+            st.success("Successfully checked out!")
+
+
+def view_attendance():
+    st.title("Attendance Records")
+
+    # Filters
+    username = st.text_input("Filter by Username (optional)")
+    start_date = st.date_input("Start Date (optional)", value=None)
+    end_date = st.date_input("End Date (optional)", value=None)
+
+    filtered_attendance = attendance_data
+    if username:
+        filtered_attendance = filtered_attendance[filtered_attendance["Username"] == username]
+    if start_date:
+        filtered_attendance = filtered_attendance[filtered_attendance["Date"] >= str(start_date)]
+    if end_date:
+        filtered_attendance = filtered_attendance[filtered_attendance["Date"] <= str(end_date)]
+
+    if not filtered_attendance.empty:
+        st.dataframe(filtered_attendance)
+        # Download button
+        csv = filtered_attendance.to_csv(index=False)
+        st.download_button(
+            label="Download Attendance Data as CSV",
+            data=csv,
+            file_name="attendance_export.csv",
+            mime="text/csv",
+        )
+    else:
+        st.info("No attendance records found for the selected filters.")
+
+
 def employee_details_page():
     st.title("Employee Details")
     if st.session_state.role != "admin":
@@ -173,7 +264,8 @@ def employee_details_page():
     if uploaded_file:
         existing_files = os.listdir(employee_directory)
         if len(existing_files) >= 30:
-            st.error("You can only upload up to 30 employee detail files. Please delete some files before uploading new ones.")
+            st.error(
+                "You can only upload up to 30 employee detail files. Please delete some files before uploading new ones.")
         else:
             file_path = os.path.join(employee_directory, uploaded_file.name)
             with open(file_path, "wb") as f:
@@ -201,7 +293,9 @@ def employee_details_page():
             search_term = st.text_input("Search Employee:")
             if st.button("Search"):
                 if search_term:
-                    filtered_data = edited_df[edited_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(), axis=1)]
+                    filtered_data = edited_df[
+                        edited_df.apply(lambda row: row.astype(str).str.contains(search_term, case=False).any(),
+                                        axis=1)]
                     if not filtered_data.empty:
                         st.dataframe(filtered_data)
                     else:
@@ -213,6 +307,7 @@ def employee_details_page():
                 st.success(f"{selected_file} deleted successfully!")
     else:
         st.info("No employee details files uploaded yet.")
+
 
 def employee_background_page():
     st.title("Employee Background")
@@ -238,6 +333,7 @@ def employee_background_page():
             st.success(f"{selected_resume} deleted successfully!")
     else:
         st.write("No resumes uploaded yet.")
+
 
 def login_page():
     st.title("JobGenix CRM - Login or Register")
@@ -266,14 +362,17 @@ def login_page():
                 st.error("Username and password cannot be empty!")
             else:
                 users[new_user] = {"password": new_pass, "role": role}
-                pd.DataFrame.from_dict(users, orient="index").reset_index().rename(columns={"index": "Username"}).to_csv(users_file, index=False)
+                pd.DataFrame.from_dict(users, orient="index").reset_index().rename(
+                    columns={"index": "Username"}).to_csv(users_file, index=False)
                 st.success(f"Account created for {new_user} as {role}.")
+
 
 def task_page():
     global tasks_data
     st.sidebar.title("Menu")
     menu = ["View Tasks", "Add Task", "Update Task", "Delete Task Data", "Login Details", "Daily Logs", "Delete User",
-            "View Passwords", "Employee Details", "Employee Background", "Apply for Leave", "Manage Leave Applications", "Leave Status", "Logout"]
+            "View Passwords", "Employee Details", "Employee Background", "Apply for Leave", "Manage Leave Applications",
+            "Leave Status", "Mark Attendance", "View Attendance", "Logout"]
     choice = st.sidebar.selectbox("Options", menu)
     st.header(f"Welcome, {st.session_state.current_user} ({st.session_state.role.capitalize()})")
     if choice == "View Tasks":
@@ -302,8 +401,10 @@ def task_page():
             if not task.strip():
                 st.error("Task name cannot be empty!")
             else:
-                tasks_data = pd.concat([tasks_data, pd.DataFrame([[task, priority, employee_name, role, status, start_date, end_date]],
-                                                                  columns=["Task", "Priority", "Employee Name", "Employee Role", "Status", "Start Date", "End Date"])])
+                tasks_data = pd.concat(
+                    [tasks_data, pd.DataFrame([[task, priority, employee_name, role, status, start_date, end_date]],
+                                              columns=["Task", "Priority", "Employee Name", "Employee Role", "Status",
+                                                       "Start Date", "End Date"])])
                 tasks_data.to_csv(tasks_file, index=False)
                 st.success("Task added!")
     if choice == "Update Task" and st.session_state.role == "employee":
@@ -370,12 +471,33 @@ def task_page():
         manage_leave_applications()
     if choice == "Leave Status":
         employee_leave_status()
+    if choice == "Mark Attendance":
+        st.title("Mark Attendance")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("Check-In"):
+                record_attendance(st.session_state.current_user, "Check-In")
+        with col2:
+            if st.button("Check-Out"):
+                record_attendance(st.session_state.current_user, "Check-Out")
+        # Show today's attendance status
+        today = datetime.now(pytz.timezone('Asia/Kolkata')).date()
+        today_record = attendance_data[
+            (attendance_data["Username"] == st.session_state.current_user) & (attendance_data["Date"] == str(today))]
+        if not today_record.empty:
+            st.write(f"**Today's Status:** {today_record['Status'].iloc[0]}")
+            st.write(f"**Check-In Time:** {today_record['Check-In Time'].iloc[0]}")
+            if today_record['Check outta Time'].iloc[0]:
+                st.write(f"**Check-Out Time:** {today_record['Check-Out Time'].iloc[0]}")
+    if choice == "View Attendance":
+        view_attendance()
     if choice == "Logout":
         record_action(st.session_state.current_user, "Logout")
         st.session_state.current_user = None
         st.session_state.role = None
         st.session_state.page = "login"
         st.success("Logged out!")
+
 
 # Main Logic
 if st.session_state.page == "login":
