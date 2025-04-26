@@ -6,4 +6,3 @@ datetime
 pytz
 datetime
 PyPDF2 
-smtplib
