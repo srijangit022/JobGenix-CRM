@@ -336,7 +336,7 @@ def employee_background_page():
 
 
 def login_page():
-    st.title("JobGenix CRM - Login or Register")
+    st.title("HRMS Login or Register")  # Updated title
     col1, col2 = st.columns(2)
     with col1:
         username = st.text_input("Username")
@@ -504,3 +504,4 @@ if st.session_state.page == "login":
     login_page()
 elif st.session_state.page == "tasks":
     task_page()
+
