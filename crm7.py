@@ -72,7 +72,7 @@ def daily_logs():
 
 # Pages
 def login_page():
-    st.title("JobGenix CRM - Login or Register")
+    st.title("HRMS - Login or Register")
     col1, col2 = st.columns(2)
 
     with col1:
